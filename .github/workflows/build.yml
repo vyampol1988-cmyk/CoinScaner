@@ -1,45 +1,68 @@
 name: Build Coin Scanner APK
 
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/build.yml'
-      - 'coin-scanner-source.zip'
+workflow_dispatch:
+push:
+paths:
+- '.github/workflows/build.yml'
+- 'coin-scanner-source.zip'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Download repository
-        uses: actions/checkout@v4
+steps:
+  - name: Download repository
+    uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Set up Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Install Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+  - name: Install Gradle
+    uses: gradle/actions/setup-gradle@v4
+    with:
+      gradle-version: '8.9'
 
-      - name: Extract project archive
-        run: |
-          if [ ! -f coin-scanner-source.zip ]; then
-            echo "ERROR: coin-scanner-source.zip is missing from repository root."
-            exit 1
-          fi
-          unzip -o coin-scanner-source.zip -d project
+  - name: Extract project archive
+    run: |
+      if [ ! -f coin-scanner-source.zip ]; then
+        echo "ERROR: coin-scanner-source.zip is missing from repository root."
+        exit 1
+      fi
+      unzip -o coin-scanner-source.zip -d project
 
-      - name: Build APK
-        working-directory: project
-        run: gradle assembleDebug
+  - name: Fix Java and Kotlin compatibility
+    working-directory: project
+    run: |
+      python3 - <<'PY'
+      from pathlib import Path
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: CoinScanner-APK
-          path: project/app/build/outputs/apk/debug/app-debug.apk
+      p = Path("app/build.gradle.kts")
+      s = p.read_text()
+
+      s = s.replace(
+          "    compileSdk = 35",
+          """    compileSdk = 35
+
+          compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_17
+              targetCompatibility = JavaVersion.VERSION_17
+          }"""
+      )
+
+      p.write_text(s)
+      print("Java compatibility set to version 17")
+      PY
+
+  - name: Build APK
+    working-directory: project
+    run: gradle assembleDebug
+
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: CoinScanner-APK
+      path: project/app/build/outputs/apk/debug/app-debug.apk
